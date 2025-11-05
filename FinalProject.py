@@ -18,105 +18,142 @@
 
 
 # ---------------------------------------------------------------
-# Imports
+# Imports (minimal project skeleton)
 # ---------------------------------------------------------------
-# Import all required libraries for:
-# - Data manipulation (pandas, numpy)
-# - Visualization (matplotlib, seaborn)
-# - Machine learning (scikit-learn, tensorflow/keras)
-# - Data scaling and encoding tools
-# ---------------------------------------------------------------
+import logging
+from pathlib import Path
+from typing import Tuple, Optional, Any
+
+import pandas as pd
+import numpy as np
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.svm import SVC
+
+# Optional deep learning import (may not be installed in all envs)
+try:
+	import tensorflow as tf
+	from tensorflow import keras
+except Exception:
+	tf = None
+	keras = None
 
 
 # ---------------------------------------------------------------
-# File Paths
+# File Paths / Constants
 # ---------------------------------------------------------------
-# Define constants for the dataset file paths:
-#   TRAIN_FILE = "adult.data"
-#   TEST_FILE  = "adult.test"
-#   NAMES_FILE = "adult.names"
-# This keeps file references centralized and easy to modify.
-# ---------------------------------------------------------------
+ROOT = Path(__file__).parent
+TRAIN_FILE: Path = ROOT / "adult.data"
+TEST_FILE: Path = ROOT / "adult.test"
+NAMES_FILE: Path = ROOT / "adult.names"
 
 
 # ---------------------------------------------------------------
-# Load Dataset
-# ---------------------------------------------------------------
-# Read the CSV data into pandas DataFrames.
-# Assign column names based on the 'adult.names' metadata.
-# Use proper delimiters, skip initial spaces, and handle test header rows.
-# ---------------------------------------------------------------
-
-
-# ---------------------------------------------------------------
-# Explore Dataset
-# ---------------------------------------------------------------
-# Perform initial exploration:
-# - Print dataset shapes, feature names, and types
-# - View a few sample rows
-# - Count and locate missing values
-# - Check for duplicates or outliers
-# - Summarize feature distributions and target balance
+# Pipeline function stubs (minimal)
+# Each function below is a placeholder with a
+# NotImplementedError to indicate where full implementations
+# should be added. Keep changes here minimal per project start.
 # ---------------------------------------------------------------
 
 
-# ---------------------------------------------------------------
-# Handle Missing Values
-# ---------------------------------------------------------------
-# Identify which columns contain missing values.
-# Choose imputation methods:
-#   - Mode imputation for categorical features (workclass, occupation)
-#   - Replace rare missing categories (e.g., native-country) with 
-#     most common value or “Unknown”
-# Ensure no more than two attributes are removed per project guidelines.
-# ---------------------------------------------------------------
+def load_dataset(path: Path) -> pd.DataFrame:
+	"""Load dataset from `path` into a pandas DataFrame.
+
+	TODO: implement parsing, column names from `NAMES_FILE`, and
+	any header cleaning required for `adult.test`.
+	"""
+	raise NotImplementedError("load_dataset is a placeholder; implement parsing logic")
 
 
-# ---------------------------------------------------------------
-# Encode Categorical Data
-# ---------------------------------------------------------------
-# Convert string-based categorical variables into numeric form
-# suitable for ML algorithms:
-#   - One-hot encoding (pd.get_dummies or sklearn OneHotEncoder)
-#   - Label encoding (if needed)
-# Align encoded columns between training and test sets.
-# ---------------------------------------------------------------
+def explore_dataset(df: pd.DataFrame) -> None:
+	"""Perform lightweight EDA (shapes, dtypes, missing counts).
+
+	TODO: log/print helpful summaries and visualizations.
+	"""
+	raise NotImplementedError("explore_dataset is a placeholder")
 
 
-# ---------------------------------------------------------------
-# Normalize / Standardize Continuous Features
-# ---------------------------------------------------------------
-# Scale numerical columns (age, hours-per-week, capital-gain, etc.)
-# using StandardScaler or MinMaxScaler to ensure balanced input ranges.
-# This step improves both ANN and SVM model performance.
-# ---------------------------------------------------------------
+def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
+	"""Identify and impute or clean missing values.
+
+	TODO: choose imputation strategies (mode for categorical, etc.).
+	"""
+	raise NotImplementedError("handle_missing_values is a placeholder")
 
 
-# ---------------------------------------------------------------
-# Separate Features and Labels
-# ---------------------------------------------------------------
-# Split the dataset into:
-#   X = input features
-#   y = target variable (1 for >50K, 0 for <=50K)
-# Maintain consistent shape and alignment for train/test splits.
-# ---------------------------------------------------------------
+def encode_categorical(df: pd.DataFrame) -> Tuple[pd.DataFrame, Any]:
+	"""Encode categorical columns and return (df_encoded, encoder).
+
+	TODO: implement OneHotEncoding or pd.get_dummies and return encoder
+	for later reuse on test set.
+	"""
+	raise NotImplementedError("encode_categorical is a placeholder")
 
 
-# ---------------------------------------------------------------
-# Save Preprocessed Data (optional)
-# ---------------------------------------------------------------
-# Save cleaned and preprocessed DataFrames to CSV for future reuse:
-#   cleaned_train.csv, cleaned_test.csv
-# This helps separate data preparation from model experimentation.
-# ---------------------------------------------------------------
+def scale_features(X: pd.DataFrame) -> Tuple[np.ndarray, StandardScaler]:
+	"""Scale numeric features and return (X_scaled, scaler).
+
+	TODO: implement StandardScaler or MinMaxScaler as appropriate.
+	"""
+	raise NotImplementedError("scale_features is a placeholder")
 
 
-# ---------------------------------------------------------------
-# Ready for Modeling
-# ---------------------------------------------------------------
-# At this point, the data is ready for:
-#   - Training and tuning an SVM classifier
-#   - Training and tuning an ANN classifier
-#   - Comparing their outputs, accuracy, and fairness
-# This phase (preprocessing) sets up Phase 2: Model Development.
-# ---------------------------------------------------------------
+def split_features_labels(df: pd.DataFrame) -> Tuple[Any, Any]:
+	"""Separate features (X) and labels (y) from preprocessed df.
+
+	TODO: map target to binary (0/1) and align columns.
+	"""
+	raise NotImplementedError("split_features_labels is a placeholder")
+
+
+def save_preprocessed(df: pd.DataFrame, out_path: Path) -> None:
+	"""Save cleaned/preprocessed DataFrame to CSV for reuse.
+
+	Keeps IO centralized and reproducible.
+	"""
+	# Minimal placeholder: actual save should call df.to_csv(out_path)
+	raise NotImplementedError("save_preprocessed is a placeholder")
+
+
+def build_ann_model(input_shape: int) -> Any:
+	"""Return an uncompiled ANN model (keras) or None if keras missing.
+
+	TODO: implement architecture, compile, and return keras.Model.
+	"""
+	if keras is None:
+		logging.warning("Keras not available in this environment")
+		return None
+	raise NotImplementedError("build_ann_model is a placeholder")
+
+
+def build_svm_model() -> SVC:
+	"""Return an untrained SVM classifier instance.
+
+	TODO: set kernel, C, class_weight, and other hyperparameters.
+	"""
+	return SVC()
+
+
+def evaluate_models(models: dict, X_test: Any, y_test: Any) -> dict:
+	"""Evaluate trained models on test data and return metrics dict.
+
+	TODO: compute accuracy, precision, recall, f1, and confusion matrix.
+	"""
+	raise NotImplementedError("evaluate_models is a placeholder")
+
+
+def main() -> None:
+	"""Main entry for the pipeline skeleton.
+
+	This function currently only outlines the intended calls. Fill in
+	the implementations above to run the full pipeline.
+	"""
+	logging.basicConfig(level=logging.INFO)
+	logging.info("Project skeleton initialized. Fill in implementations in each function.")
+	print("Project skeleton initialized. Open this file and implement functions.")
+
+
+if __name__ == "__main__":
+	main()
+
