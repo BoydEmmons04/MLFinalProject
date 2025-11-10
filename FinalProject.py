@@ -4,15 +4,15 @@
 # Date   : 11/4/2025
 #
 # Project: ML Final Project – Census & Income Data
-# Purpose: 
-#   This project creates an Artificial Neural Network (ANN) and a 
-#   Support Vector Machine (SVM) and compares their outputs for a 
-#   Binary Classification problem. This classifies whether or not 
+# Purpose:
+#   This project creates an Artificial Neural Network (ANN) and a
+#   Support Vector Machine (SVM) and compares their outputs for a
+#   Binary Classification problem. This classifies whether or not
 #   an individual's income exceeds $50K a year given training data.
 #
 #   The following code provides a structured pipeline for loading,
 #   cleaning, preprocessing, and preparing the dataset before model
-#   development. Each section includes notes describing its role and 
+#   development. Each section includes notes describing its role and
 #   reasonable methods to implement.
 # ---------------------------------------------------------------
 
@@ -48,30 +48,100 @@ TRAIN_FILE: Path = ROOT / "adult.data"
 TEST_FILE: Path = ROOT / "adult.test"
 NAMES_FILE: Path = ROOT / "adult.names"
 
+# Canonical column names from adult.names
+COLUMN_NAMES = [
+	'age', 'workclass', 'fnlwgt', 'education', 'education-num',
+	'marital-status', 'occupation', 'relationship', 'race', 'sex',
+	'capital-gain', 'capital-loss', 'hours-per-week', 'native-country', 'income'
+]
+
 
 # ---------------------------------------------------------------
-# Pipeline function stubs (minimal)
-# Each function below is a placeholder with a
-# NotImplementedError to indicate where full implementations
-# should be added. Keep changes here minimal per project start.
+# Internal helpers for dataset loading/cleaning
 # ---------------------------------------------------------------
+def _is_test_file(p: Path) -> bool:
+	return p.name.lower().endswith("adult.test")
 
 
+def _clean_test_labels(df: pd.DataFrame) -> pd.DataFrame:
+	# adult.test labels include a trailing '.' (e.g., '>50K.'), strip it.
+	if 'income' in df.columns and pd.api.types.is_object_dtype(df['income']):
+		df['income'] = df['income'].str.strip().str.replace(r"\.$", "", regex=True)
+	return df
+
+
+# ---------------------------------------------------------------
+# Pipeline function implementations / stubs
+# ---------------------------------------------------------------
 def load_dataset(path: Path) -> pd.DataFrame:
-	"""Load dataset from `path` into a pandas DataFrame.
+	"""Load the Adult (Census Income) dataset from a file path.
 
-	TODO: implement parsing, column names from `NAMES_FILE`, and
-	any header cleaning required for `adult.test`.
+	Supports:
+	  - adult.data  (training)
+	  - adult.test  (testing; skips first header line and strips label periods)
+
+	Behavior:
+	  - Assigns canonical COLUMN_NAMES
+	  - Treats '?' as missing (NaN)
+	  - Trims leading spaces in fields
 	"""
-	raise NotImplementedError("load_dataset is a placeholder; implement parsing logic")
+	if not path.exists():
+		raise FileNotFoundError(f"Dataset not found: {path}")
+
+	is_test = _is_test_file(path)
+	read_kwargs = dict(
+		header=None,
+		names=COLUMN_NAMES,
+		na_values=['?'],
+		skipinitialspace=True
+	)
+	if is_test:
+		# adult.test has a first line that's not data
+		read_kwargs['skiprows'] = 1
+
+	df = pd.read_csv(path, **read_kwargs)
+	if is_test:
+		df = _clean_test_labels(df)
+
+	# Sanity check: expect exactly 15 columns
+	if df.shape[1] != len(COLUMN_NAMES):
+		raise ValueError(
+			f"Unexpected column count in {path.name}: got {df.shape[1]}, expected {len(COLUMN_NAMES)}"
+		)
+	return df
 
 
 def explore_dataset(df: pd.DataFrame) -> None:
-	"""Perform lightweight EDA (shapes, dtypes, missing counts).
+	"""Lightweight EDA: shape, dtypes, missingness, class balance, and numeric summary."""
+	logger = logging.getLogger("EDA")
 
-	TODO: log/print helpful summaries and visualizations.
-	"""
-	raise NotImplementedError("explore_dataset is a placeholder")
+	logger.info("Shape: %s", df.shape)
+	logger.info("Dtypes:\n%s", df.dtypes)
+
+	with pd.option_context('display.max_rows', 5, 'display.max_columns', 20):
+		logger.info("Head:\n%s", df.head())
+
+	# Missing values overview
+	na_counts = df.isna().sum().sort_values(ascending=False)
+	logger.info("Missing values per column (desc):\n%s", na_counts)
+
+	# Target distribution (if present)
+	if 'income' in df.columns:
+		class_counts = df['income'].value_counts(dropna=False)
+		class_ratio = (class_counts / class_counts.sum()).round(4)
+		logger.info("Target distribution (counts):\n%s", class_counts.to_string())
+		logger.info("Target distribution (proportions):\n%s", class_ratio.to_string())
+
+	# Basic type split
+	cat_cols = df.select_dtypes(include='object').columns.tolist()
+	num_cols = df.select_dtypes(exclude='object').columns.tolist()
+	logger.info("Numeric columns (%d): %s", len(num_cols), num_cols)
+	logger.info("Categorical columns (%d): %s", len(cat_cols), cat_cols)
+
+	# Descriptive statistics for numeric features
+	if num_cols:
+		with pd.option_context('display.max_rows', 100, 'display.max_columns', 20):
+			logger.info("Numeric summary:\n%s", df[num_cols].describe().T)
 
 
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
@@ -149,11 +219,20 @@ def main() -> None:
 	This function currently only outlines the intended calls. Fill in
 	the implementations above to run the full pipeline.
 	"""
-	logging.basicConfig(level=logging.INFO)
+	logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
 	logging.info("Project skeleton initialized. Fill in implementations in each function.")
-	print("Project skeleton initialized. Open this file and implement functions.")
+
+	# Example usage for the implemented parts:
+	try:
+		train_df = load_dataset(TRAIN_FILE)
+		test_df = load_dataset(TEST_FILE)
+		explore_dataset(train_df)
+		explore_dataset(test_df)
+	except Exception as e:
+		logging.exception("Data load/explore failed: %s", e)
+
+	print("Project skeleton initialized. Open this file and implement remaining functions.")
 
 
 if __name__ == "__main__":
 	main()
-
