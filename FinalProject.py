@@ -187,14 +187,45 @@ def save_preprocessed(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def build_ann_model(input_shape: int) -> Any:
-	"""Return an uncompiled ANN model (keras) or None if keras missing.
+	"""Build and compile a binary ANN for the Adult income task.
 
-	TODO: implement architecture, compile, and return keras.Model.
+	Architecture:
+	  Input -> Dense(64, ReLU) -> Dropout(0.2)
+	        -> Dense(32, ReLU) -> Dropout(0.2)
+	        -> Dense(1, Sigmoid)
+
+	Returns:
+	  keras.Model (compiled), or None if Keras is unavailable.
 	"""
 	if keras is None:
 		logging.warning("Keras not available in this environment")
 		return None
-	raise NotImplementedError("build_ann_model is a placeholder")
+
+	# Optional, reproducible behavior if TF is present
+	try:
+		if tf is not None:
+			tf.random.set_seed(42)
+	except Exception:
+		pass
+
+	inputs = keras.Input(shape=(input_shape,), name="features")
+	x = keras.layers.Dense(64, activation="relu", kernel_initializer="he_normal")(inputs)
+	x = keras.layers.Dropout(0.2)(x)
+	x = keras.layers.Dense(32, activation="relu", kernel_initializer="he_normal")(x)
+	x = keras.layers.Dropout(0.2)(x)
+	outputs = keras.layers.Dense(1, activation="sigmoid", name="income")(x)
+
+	model = keras.Model(inputs=inputs, outputs=outputs, name="ann_income_classifier")
+	model.compile(
+		optimizer=keras.optimizers.Adam(learning_rate=1e-3),
+		loss="binary_crossentropy",
+		metrics=[
+			keras.metrics.BinaryAccuracy(name="accuracy"),
+			keras.metrics.AUC(name="auc")
+		],
+	)
+	return model
+
 
 
 def build_svm_model() -> SVC:
