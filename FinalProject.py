@@ -250,16 +250,26 @@ def encode_categorical(
     num_cols = df.select_dtypes(exclude="object").columns.tolist()
 
     if encoder is None:
-        encoder = OneHotEncoder(
-            handle_unknown="ignore",
-            sparse=False,
-        )
-        cat_array = encoder.fit_transform(df[cat_cols]) if cat_cols else np.empty(
-            (len(df), 0)
+        # Handle both new and old sklearn versions
+        try:
+            # Newer sklearn (uses sparse_output)
+            encoder = OneHotEncoder(
+                handle_unknown="ignore",
+                sparse_output=False,
+            )
+        except TypeError:
+            # Older sklearn (uses sparse)
+            encoder = OneHotEncoder(
+                handle_unknown="ignore",
+                sparse=False,
+            )
+
+        cat_array = (
+            encoder.fit_transform(df[cat_cols]) if cat_cols else np.empty((len(df), 0))
         )
     else:
-        cat_array = encoder.transform(df[cat_cols]) if cat_cols else np.empty(
-            (len(df), 0)
+        cat_array = (
+            encoder.transform(df[cat_cols]) if cat_cols else np.empty((len(df), 0))
         )
 
     if cat_cols:
