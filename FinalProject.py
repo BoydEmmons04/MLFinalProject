@@ -1,25 +1,20 @@
-# ---------------------------------------------------------------
+# -------------------------------------------------------------------
 # Authors: Carter Ward, Boyd Emmons
-# Class  : CS 430 - 1
-# Date   : 11/4/2025
+# Course : CS 430 - Section 1
+# Date   : 12/2/25
 #
-# Project: ML Final Project – Census & Income Data
-# Purpose:
-#   This project creates an Artificial Neural Network (ANN) and a
-#   Support Vector Machine (SVM) and compares their outputs for a
-#   Binary Classification problem. This classifies whether or not
-#   an individual's income exceeds $50K a year given training data.
-#
-#   The following code provides a structured pipeline for loading,
-#   cleaning, preprocessing, and preparing the dataset before model
-#   development. Each section includes notes describing its role and
-#   reasonable methods to implement.
-# ---------------------------------------------------------------
+# Project Summary:
+#   This program develops two predictive models—a neural network and an
+#   SVM—to estimate whether an individual's income surpasses $50K per
+#   year using the Adult Census dataset. The workflow includes data
+#   loading, preparation, feature engineering, model training, and
+#   evaluation. 
+# -------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------
+# -------------------------------------------------------------------
 # Imports
-# ---------------------------------------------------------------
+# -------------------------------------------------------------------
 import logging
 from pathlib import Path
 from typing import Tuple, Optional, Any, Dict
@@ -38,24 +33,24 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
-# Optional deep learning import (may not be installed in all envs)
+# Deep learning tools (available only if the environment supports them)
 try:
     import tensorflow as tf
     from tensorflow import keras
-except Exception:  # pragma: no cover - optional dependency
+except Exception:
     tf = None
     keras = None
 
 
-# ---------------------------------------------------------------
-# File Paths / Constants
-# ---------------------------------------------------------------
+# -------------------------------------------------------------------
+# File paths and constants
+# -------------------------------------------------------------------
 ROOT = Path(__file__).parent
 TRAIN_FILE: Path = ROOT / "adult.data"
 TEST_FILE: Path = ROOT / "adult.test"
 NAMES_FILE: Path = ROOT / "adult.names"
 
-# Canonical column names from adult.names
+# Expected column names for the Adult dataset
 COLUMN_NAMES = [
     "age",
     "workclass",
@@ -75,34 +70,35 @@ COLUMN_NAMES = [
 ]
 
 
-# ---------------------------------------------------------------
-# Internal helpers for dataset loading/cleaning
-# ---------------------------------------------------------------
+# -------------------------------------------------------------------
+# Helper routines for data loading and cleanup
+# -------------------------------------------------------------------
 def _is_test_file(p: Path) -> bool:
+    """Check whether the file corresponds to the testing split."""
     return p.name.lower().endswith("adult.test")
 
 
 def _clean_test_labels(df: pd.DataFrame) -> pd.DataFrame:
-    """adult.test labels include a trailing '.' (e.g., '>50K.'); strip it."""
+    """Remove trailing periods from the income labels in the test data."""
     if "income" in df.columns and pd.api.types.is_object_dtype(df["income"]):
         df["income"] = df["income"].str.strip().str.replace(r"\.$", "", regex=True)
     return df
 
 
-# ---------------------------------------------------------------
-# Pipeline function implementations
-# ---------------------------------------------------------------
+# -------------------------------------------------------------------
+# Data ingestion and preparation functions
+# -------------------------------------------------------------------
 def load_dataset(path: Path) -> pd.DataFrame:
-    """Load the Adult (Census Income) dataset from a file path.
+    """Load a Census Income dataset file and convert it to a DataFrame.
 
-    Supports:
-      - adult.data  (training)
-      - adult.test  (testing; skips first header line and strips label periods)
+    - Assigns the known column names
+    - Handles '?' markers as missing values
+    - Strips unnecessary whitespace
+    - Applies test-file specific cleanup rules
 
-    Behavior:
-      - Assigns canonical COLUMN_NAMES
-      - Treats '?' as missing (NaN)
-      - Trims leading spaces in fields
+    Raises:
+        FileNotFoundError: if the file cannot be located.
+        ValueError: if the column count does not match expectations.
     """
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
@@ -114,15 +110,14 @@ def load_dataset(path: Path) -> pd.DataFrame:
         na_values=["?"],
         skipinitialspace=True,
     )
+
     if is_test:
-        # adult.test has a first line that's not data
-        read_kwargs["skiprows"] = 1
+        read_kwargs["skiprows"] = 1  # test file has a header line
 
     df = pd.read_csv(path, **read_kwargs)
     if is_test:
         df = _clean_test_labels(df)
 
-    # Sanity check: expect exactly 15 columns
     if df.shape[1] != len(COLUMN_NAMES):
         raise ValueError(
             f"Unexpected column count in {path.name}: "
@@ -132,7 +127,7 @@ def load_dataset(path: Path) -> pd.DataFrame:
 
 
 def explore_dataset(df: pd.DataFrame) -> None:
-    """Lightweight EDA: shape, dtypes, missingness, class balance, and numeric summary."""
+    """Log a basic exploratory summary of the dataset structure."""
     logger = logging.getLogger("EDA")
 
     logger.info("Shape: %s", (df.shape,))
@@ -141,42 +136,33 @@ def explore_dataset(df: pd.DataFrame) -> None:
     with pd.option_context("display.max_rows", 5, "display.max_columns", 20):
         logger.info("Head:\n%s", df.head())
 
-    # Missing values overview
     na_counts = df.isna().sum().sort_values(ascending=False)
-    logger.info("Missing values per column (desc):\n%s", na_counts)
+    logger.info("Missing values by column:\n%s", na_counts)
 
-    # Target distribution (if present)
     if "income" in df.columns:
         class_counts = df["income"].value_counts(dropna=False)
         class_ratio = (class_counts / class_counts.sum()).round(4)
-        logger.info("Target distribution (counts):\n%s", class_counts.to_string())
-        logger.info("Target distribution (proportions):\n%s", class_ratio.to_string())
+        logger.info("Class distribution:\n%s", class_counts.to_string())
+        logger.info("Class proportions:\n%s", class_ratio.to_string())
 
-    # Basic type split
     cat_cols = df.select_dtypes(include="object").columns.tolist()
     num_cols = df.select_dtypes(exclude="object").columns.tolist()
-    logger.info("Numeric columns (%d): %s", len(num_cols), num_cols)
-    logger.info("Categorical columns (%d): %s", len(cat_cols), cat_cols)
+    logger.info("Numeric fields (%d): %s", len(num_cols), num_cols)
+    logger.info("Categorical fields (%d): %s", len(cat_cols), cat_cols)
 
-    # Descriptive statistics for numeric features
     if num_cols:
         with pd.option_context("display.max_rows", 100, "display.max_columns", 20):
             logger.info("Numeric summary:\n%s", df[num_cols].describe().T)
 
 
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
-    """Identify and impute missing values.
-
-    Strategy (satisfies 'do not remove more than two attributes'):
-      - Numeric features: impute with median
-      - Categorical features: impute with mode (most frequent value)
-      - Target 'income' left untouched (it has no official missing values)
-    """
+    """Fill missing entries using a median strategy for numeric fields
+    and a mode strategy for categorical fields."""
     logger = logging.getLogger("MissingValues")
     df = df.copy()
 
-    total_missing_before = int(df.isna().sum().sum())
-    logger.info("Total missing values BEFORE imputation: %d", total_missing_before)
+    before = int(df.isna().sum().sum())
+    logger.info("Missing values before processing: %d", before)
 
     target_col = "income"
     feature_cols = [c for c in df.columns if c != target_col]
@@ -184,42 +170,32 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     num_cols = df[feature_cols].select_dtypes(exclude="object").columns
     cat_cols = df[feature_cols].select_dtypes(include="object").columns
 
-    # Numeric: median
     for col in num_cols:
-        median_val = df[col].median()
-        df[col] = df[col].fillna(median_val)
-        logger.debug("Imputed numeric column '%s' with median %.3f", col, median_val)
+        df[col] = df[col].fillna(df[col].median())
 
-    # Categorical: mode
     for col in cat_cols:
         mode_series = df[col].mode(dropna=True)
         if not mode_series.empty:
-            mode_val = mode_series.iloc[0]
-            df[col] = df[col].fillna(mode_val)
-            logger.debug("Imputed categorical column '%s' with mode '%s'", col, mode_val)
+            df[col] = df[col].fillna(mode_series.iloc[0])
 
-    total_missing_after = int(df.isna().sum().sum())
-    logger.info("Total missing values AFTER imputation: %d", total_missing_after)
+    after = int(df.isna().sum().sum())
+    logger.info("Missing values after processing: %d", after)
 
     return df
 
 
 def split_features_labels(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
-    """Separate features (X) and labels (y) from preprocessed df.
-
-    - Drops 'income' from features
-    - Maps labels to binary (<=50K -> 0, >50K -> 1)
-    """
+    """Separate predictors from the target and convert labels to binary."""
     if "income" not in df.columns:
         raise ValueError("Expected 'income' column to be present.")
 
-    y_raw = df["income"].astype(str).str.strip()
-    label_map = {"<=50K": 0, ">50K": 1}
+    y_text = df["income"].astype(str).str.strip()
+    mapping = {"<=50K": 0, ">50K": 1}
 
-    y = y_raw.map(label_map)
+    y = y_text.map(mapping)
     if y.isna().any():
-        bad_vals = sorted(y_raw[y.isna()].unique())
-        raise ValueError(f"Unexpected label values encountered: {bad_vals}")
+        missing_vals = sorted(y_text[y.isna()].unique())
+        raise ValueError(f"Unexpected label values encountered: {missing_vals}")
 
     X = df.drop(columns=["income"])
     return X, y.astype(int)
@@ -228,41 +204,15 @@ def split_features_labels(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
 def encode_categorical(
     df: pd.DataFrame, encoder: Optional[OneHotEncoder] = None
 ) -> Tuple[pd.DataFrame, OneHotEncoder]:
-    """Encode categorical columns using one-hot encoding.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Feature-only DataFrame (no target column).
-    encoder : OneHotEncoder or None
-        If None, fit a new encoder. Otherwise, transform using the
-        passed encoder (for test/validation sets).
-
-    Returns
-    -------
-    encoded_df : pd.DataFrame
-        DataFrame with numeric columns untouched and categorical
-        columns replaced by their one-hot expansions.
-    encoder : OneHotEncoder
-        Fitted encoder (new or the one passed in).
-    """
+    """Convert categorical fields into a one-hot encoded representation."""
     cat_cols = df.select_dtypes(include="object").columns.tolist()
     num_cols = df.select_dtypes(exclude="object").columns.tolist()
 
     if encoder is None:
-        # Handle both new and old sklearn versions
         try:
-            # Newer sklearn (uses sparse_output)
-            encoder = OneHotEncoder(
-                handle_unknown="ignore",
-                sparse_output=False,
-            )
+            encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
         except TypeError:
-            # Older sklearn (uses sparse)
-            encoder = OneHotEncoder(
-                handle_unknown="ignore",
-                sparse=False,
-            )
+            encoder = OneHotEncoder(handle_unknown="ignore", sparse=False)
 
         cat_array = (
             encoder.fit_transform(df[cat_cols]) if cat_cols else np.empty((len(df), 0))
@@ -273,8 +223,11 @@ def encode_categorical(
         )
 
     if cat_cols:
-        cat_feature_names = encoder.get_feature_names_out(cat_cols)
-        cat_df = pd.DataFrame(cat_array, columns=cat_feature_names, index=df.index)
+        cat_df = pd.DataFrame(
+            cat_array,
+            columns=encoder.get_feature_names_out(cat_cols),
+            index=df.index,
+        )
     else:
         cat_df = pd.DataFrame(index=df.index)
 
@@ -287,16 +240,7 @@ def encode_categorical(
 def scale_features(
     X: pd.DataFrame, scaler: Optional[StandardScaler] = None
 ) -> Tuple[np.ndarray, StandardScaler]:
-    """Scale numeric features and return (X_scaled, scaler).
-
-    Parameters
-    ----------
-    X : pd.DataFrame
-        Feature matrix (numeric) after encoding.
-    scaler : StandardScaler or None
-        If None, fit a new scaler. Otherwise, transform using the
-        passed scaler (for test/validation sets).
-    """
+    """Standardize numerical features using the z-score transformation."""
     if scaler is None:
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
@@ -307,28 +251,21 @@ def scale_features(
 
 
 def save_preprocessed(df: pd.DataFrame, out_path: Path) -> None:
-    """Save cleaned/preprocessed DataFrame to CSV for reuse."""
+    """Write a processed DataFrame to a CSV file."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_path, index=False)
-    logging.getLogger("IO").info("Saved preprocessed data to %s", out_path)
+    logging.getLogger("IO").info("Saved preprocessed data: %s", out_path)
 
 
+# -------------------------------------------------------------------
+# Model building routines
+# -------------------------------------------------------------------
 def build_ann_model(input_shape: int) -> Any:
-    """Build and compile a binary ANN for the Adult income task.
-
-    Architecture:
-      Input -> Dense(64, ReLU) -> Dropout(0.2)
-            -> Dense(32, ReLU) -> Dropout(0.2)
-            -> Dense(1, Sigmoid)
-
-    Returns:
-      keras.Model (compiled), or None if Keras is unavailable.
-    """
+    """Construct a feedforward neural network for binary classification."""
     if keras is None:
-        logging.warning("Keras not available in this environment; ANN will be skipped.")
+        logging.warning("Keras not available; ANN model creation skipped.")
         return None
 
-    # Optional, reproducible behavior if TF is present
     try:
         if tf is not None:
             tf.random.set_seed(42)
@@ -346,20 +283,13 @@ def build_ann_model(input_shape: int) -> Any:
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-3),
         loss="binary_crossentropy",
-        metrics=[
-            keras.metrics.BinaryAccuracy(name="accuracy"),
-            keras.metrics.AUC(name="auc"),
-        ],
+        metrics=[keras.metrics.BinaryAccuracy(name="accuracy"), keras.metrics.AUC(name="auc")],
     )
     return model
 
 
 def build_svm_model() -> SVC:
-    """Return an untrained SVM classifier instance.
-
-    Here we use an RBF-kernel SVC with class_weight='balanced' to
-    handle slight class imbalance in the Adult dataset.
-    """
+    """Create an RBF-kernel SVM tuned for imbalanced classification."""
     svm = SVC(
         kernel="rbf",
         C=1.0,
@@ -369,36 +299,29 @@ def build_svm_model() -> SVC:
     return svm
 
 
+# -------------------------------------------------------------------
+# Evaluation
+# -------------------------------------------------------------------
 def evaluate_models(models: Dict[str, Any], X_test: Any, y_test: Any) -> Dict[str, dict]:
-    """Evaluate trained models on test data and return a metrics dict.
-
-    For each model we compute:
-      - Accuracy
-      - Precision
-      - Recall
-      - F1 score
-      - Confusion matrix
-    """
-    results: Dict[str, dict] = {}
+    """Evaluate each model and compute standard classification metrics."""
+    results = {}
     logger = logging.getLogger("Eval")
 
     for name, model in models.items():
         if model is None:
-            logger.warning("Model '%s' is None; skipping.", name)
+            logger.warning("Model '%s' is missing; skipping.", name)
             continue
 
-        # Get predictions
-        if hasattr(model, "predict"):
-            y_pred = model.predict(X_test)
+        if not hasattr(model, "predict"):
+            raise ValueError(f"Model '{name}' lacks a predict() method.")
 
-            # Keras models output probabilities in shape (N, 1)
-            if not isinstance(model, SVC):
-                y_pred = np.asarray(y_pred).reshape(-1)
-                y_pred = (y_pred >= 0.5).astype(int)
-            else:
-                y_pred = np.asarray(y_pred).reshape(-1)
+        y_pred = model.predict(X_test)
+
+        if not isinstance(model, SVC):
+            y_pred = np.asarray(y_pred).reshape(-1)
+            y_pred = (y_pred >= 0.5).astype(int)
         else:
-            raise ValueError(f"Model '{name}' does not implement predict().")
+            y_pred = np.asarray(y_pred).reshape(-1)
 
         acc = accuracy_score(y_test, y_pred)
         prec = precision_score(y_test, y_pred, zero_division=0)
@@ -407,12 +330,8 @@ def evaluate_models(models: Dict[str, Any], X_test: Any, y_test: Any) -> Dict[st
         cm = confusion_matrix(y_test, y_pred)
 
         logger.info(
-            "[%s] Accuracy: %.4f | Precision: %.4f | Recall: %.4f | F1: %.4f",
-            name,
-            acc,
-            prec,
-            rec,
-            f1,
+            "[%s] Acc: %.4f | Precision: %.4f | Recall: %.4f | F1: %.4f",
+            name, acc, prec, rec, f1,
         )
         logger.info("[%s] Confusion matrix:\n%s", name, cm)
 
@@ -427,79 +346,54 @@ def evaluate_models(models: Dict[str, Any], X_test: Any, y_test: Any) -> Dict[st
     return results
 
 
-# ---------------------------------------------------------------
-# Main pipeline
-# ---------------------------------------------------------------
+# -------------------------------------------------------------------
+# Main execution pipeline
+# -------------------------------------------------------------------
 def main() -> None:
-    """Main entry for the pipeline.
-
-    Steps:
-      1. Load train and test datasets
-      2. Explore basic properties (logged)
-      3. Handle missing values
-      4. Split features/labels
-      5. Encode categorical variables
-      6. Scale features
-      7. Train SVM and ANN
-      8. Evaluate and print metrics
-      9. Save preprocessed datasets
-    """
+    """Run the full processing and modeling sequence."""
     logging.basicConfig(
-        level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s"
+        level=logging.INFO,
+        format="%(levelname)s | %(name)s | %(message)s"
     )
     logger = logging.getLogger("Main")
-    logger.info("Starting Census Income ML pipeline.")
+    logger.info("Pipeline started.")
 
-    # -----------------------------------------------------------
-    # 1. Load datasets
-    # -----------------------------------------------------------
+    # --- 1. Load datasets ---
     try:
         train_df = load_dataset(TRAIN_FILE)
         test_df = load_dataset(TEST_FILE)
     except Exception as e:
-        logger.exception("Data loading failed: %s", e)
+        logger.exception("Failed to load data: %s", e)
         return
 
-    # -----------------------------------------------------------
-    # 2. Simple exploration (logged)
-    # -----------------------------------------------------------
-    logger.info("Exploring training data...")
+    # --- 2. Preliminary inspection ---
+    logger.info("Inspecting training data...")
     explore_dataset(train_df)
-    logger.info("Exploring test data...")
+    logger.info("Inspecting test data...")
     explore_dataset(test_df)
 
-    # -----------------------------------------------------------
-    # 3. Handle missing values
-    # -----------------------------------------------------------
+    # --- 3. Missing value resolution ---
     train_df = handle_missing_values(train_df)
     test_df = handle_missing_values(test_df)
 
-    # -----------------------------------------------------------
-    # 4. Split features and labels
-    # -----------------------------------------------------------
+    # --- 4. Feature/label separation ---
     X_train_df, y_train = split_features_labels(train_df)
     X_test_df, y_test = split_features_labels(test_df)
 
-    # -----------------------------------------------------------
-    # 5. Encode categorical features
-    #    (fit on train, reuse encoder on test)
-    # -----------------------------------------------------------
-    X_train_encoded, ohe = encode_categorical(X_train_df, encoder=None)
-    X_test_encoded, _ = encode_categorical(X_test_df, encoder=ohe)
+    # --- 5. Categorical encoding ---
+    X_train_encoded, encoder = encode_categorical(X_train_df, encoder=None)
+    X_test_encoded, _ = encode_categorical(X_test_df, encoder=encoder)
 
-    # -----------------------------------------------------------
-    # 6. Scale features
-    #    (fit scaler on train, reuse on test)
-    # -----------------------------------------------------------
+    # --- 6. Scaling ---
     X_train_scaled, scaler = scale_features(X_train_encoded, scaler=None)
     X_test_scaled, _ = scale_features(X_test_encoded, scaler=scaler)
 
-    # Optionally create a validation split for ANN
+    # Create validation subset for ANN
     (
-        X_train_split,
-        X_val_split,
-        y_train_split,
-        y_val_split,
+        X_split_train,
+        X_split_val,
+        y_split_train,
+        y_split_val,
     ) = train_test_split(
         X_train_scaled,
         y_train,
@@ -508,46 +402,37 @@ def main() -> None:
         stratify=y_train,
     )
 
-    # -----------------------------------------------------------
-    # 7. Train models
-    # -----------------------------------------------------------
-    # 7a. SVM
-    logger.info("Training SVM model...")
+    # --- 7. Train models ---
+    logger.info("Training SVM...")
     svm_model = build_svm_model()
     svm_model.fit(X_train_scaled, y_train)
 
-    # 7b. ANN
     if keras is not None:
-        logger.info("Training ANN model...")
+        logger.info("Training ANN...")
         ann_model = build_ann_model(X_train_scaled.shape[1])
         history = ann_model.fit(
-            X_train_split,
-            y_train_split.values,
-            validation_data=(X_val_split, y_val_split.values),
+            X_split_train,
+            y_split_train.values,
+            validation_data=(X_split_val, y_split_val.values),
             epochs=20,
             batch_size=256,
             verbose=0,
         )
         logger.info(
-            "ANN training complete. Final training accuracy: %.4f",
+            "ANN training completed. Final training accuracy: %.4f",
             float(history.history["accuracy"][-1]),
         )
     else:
         ann_model = None
-        logger.warning("Keras not available; ANN training skipped.")
+        logger.warning("ANN model skipped (TensorFlow/Keras unavailable).")
 
-    # -----------------------------------------------------------
-    # 8. Evaluate models on held-out test set
-    # -----------------------------------------------------------
-    logger.info("Evaluating models on test set...")
+    # --- 8. Evaluation ---
+    logger.info("Evaluating models...")
     models = {"SVM": svm_model, "ANN": ann_model}
-    metrics_dict = evaluate_models(models, X_test_scaled, y_test.values)
+    metrics = evaluate_models(models, X_test_scaled, y_test.values)
+    logger.info("Evaluation results: %s", metrics)
 
-    logger.info("Evaluation summary: %s", metrics_dict)
-
-    # -----------------------------------------------------------
-    # 9. Save preprocessed datasets (for reproducibility/reporting)
-    # -----------------------------------------------------------
+    # --- 9. Save processed data ---
     train_preprocessed = pd.DataFrame(
         np.column_stack([X_train_scaled, y_train.values]),
         columns=list(X_train_encoded.columns) + ["income_binary"],
@@ -560,7 +445,7 @@ def main() -> None:
     save_preprocessed(train_preprocessed, ROOT / "adult_preprocessed_train.csv")
     save_preprocessed(test_preprocessed, ROOT / "adult_preprocessed_test.csv")
 
-    logger.info("Pipeline finished successfully.")
+    logger.info("Pipeline completed successfully.")
 
 
 if __name__ == "__main__":
