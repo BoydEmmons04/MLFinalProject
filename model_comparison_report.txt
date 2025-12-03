@@ -1,0 +1,29 @@
+====================================================
+        MODEL PERFORMANCE COMPARISON REPORT         
+====================================================
+
+Model: SVM
+----------
+Accuracy         : 0.7996
+Precision        : 0.5513
+Recall           : 0.8144
+F1 Score         : 0.6575
+Confusion Matrix :
+[[9886 2549]
+ [ 714 3132]]
+
+Model: ANN
+----------
+Accuracy         : 0.8143
+Precision        : 0.6438
+Recall           : 0.4789
+F1 Score         : 0.5493
+Confusion Matrix :
+[[11416  1019]
+ [ 2004  1842]]
+
+====================================================
+                     SUMMARY                        
+====================================================
+
+ANN outperformed SVM by 0.0147 accuracy points.

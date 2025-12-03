@@ -7,7 +7,7 @@
 #   This program uses two models (ANN & SVM) to predict whether income is > 50K
 #   using the Adult Census dataset. The code loads the data, cleans
 #   it, encodes features, scales them, trains the models, and then
-#   prints out evaluation metrics.
+#   prints out evaluation metrics. A comparison report is saved to file.
 # -------------------------------------------------------------------
 
 import logging
@@ -111,19 +111,19 @@ def explore_dataset(df: pd.DataFrame) -> None:
     logger = logging.getLogger("EDA")
 
     logger.info("Shape: %s", (df.shape,))
-    logger.info("Dtypes:\n%s", df.dtypes)
+    logger.info("Dtypes: %s", df.dtypes)
 
     with pd.option_context("display.max_rows", 5, "display.max_columns", 20):
-        logger.info("Head:\n%s", df.head())
+        logger.info("Head: %s", df.head())
 
     na_counts = df.isna().sum().sort_values(ascending=False)
-    logger.info("Missing values by column:\n%s", na_counts)
+    logger.info("Missing values by column: %s", na_counts)
 
     if "income" in df.columns:
         class_counts = df["income"].value_counts(dropna=False)
         class_ratio = (class_counts / class_counts.sum()).round(4)
-        logger.info("Class distribution:\n%s", class_counts.to_string())
-        logger.info("Class proportions:\n%s", class_ratio.to_string())
+        logger.info("Class distribution: %s", class_counts.to_string())
+        logger.info("Class proportions: %s", class_ratio.to_string())
 
     cat_cols = df.select_dtypes(include="object").columns.tolist()
     num_cols = df.select_dtypes(exclude="object").columns.tolist()
@@ -132,7 +132,7 @@ def explore_dataset(df: pd.DataFrame) -> None:
 
     if num_cols:
         with pd.option_context("display.max_rows", 100, "display.max_columns", 20):
-            logger.info("Numeric summary:\n%s", df[num_cols].describe().T)
+            logger.info("Numeric summary: %s", df[num_cols].describe().T)
 
 
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
@@ -244,6 +244,50 @@ def save_preprocessed(df: pd.DataFrame, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_path, index=False)
     logging.getLogger("IO").info("Saved preprocessed data: %s", out_path)
+
+
+# -------------------------------------------------------------------
+# Model comparison output function (SVM vs ANN)
+# -------------------------------------------------------------------
+def save_model_comparison(metrics: Dict[str, dict], out_path: Path) -> None:
+    """
+    Generate a clean comparison report (ANN vs SVM) and save it to a file.
+    Includes accuracy, precision, recall, F1, and confusion matrices.
+    """
+    lines = []
+    lines.append("====================================================")
+    lines.append("        MODEL PERFORMANCE COMPARISON REPORT         ")
+    lines.append("====================================================\n")
+
+    for model_name, m in metrics.items():
+        lines.append(f"Model: {model_name}")
+        lines.append("-" * (7 + len(model_name)))
+        lines.append(f"Accuracy         : {m['accuracy']:.4f}")
+        lines.append(f"Precision        : {m['precision']:.4f}")
+        lines.append(f"Recall           : {m['recall']:.4f}")
+        lines.append(f"F1 Score         : {m['f1']:.4f}")
+        lines.append("Confusion Matrix :")
+        lines.append(str(m["confusion_matrix"]))
+        lines.append("")
+
+    lines.append("====================================================")
+    lines.append("                     SUMMARY                        ")
+    lines.append("====================================================\n")
+
+    if "SVM" in metrics and "ANN" in metrics:
+        svm_acc = metrics["SVM"]["accuracy"]
+        ann_acc = metrics["ANN"]["accuracy"]
+
+        if ann_acc > svm_acc:
+            lines.append(f"ANN outperformed SVM by {ann_acc - svm_acc:.4f} accuracy points.")
+        elif svm_acc > ann_acc:
+            lines.append(f"SVM outperformed ANN by {svm_acc - ann_acc:.4f} accuracy points.")
+        else:
+            lines.append("ANN and SVM achieved identical accuracy.")
+
+    out_path.parent.mkdir(exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
 
 
 # -------------------------------------------------------------------
@@ -546,7 +590,7 @@ def evaluate_models(models: Dict[str, Any], X_test: Any, y_test: Any) -> Dict[st
             rec,
             f1,
         )
-        logger.info("[%s] Confusion matrix:\n%s", name, cm)
+        logger.info("[%s] Confusion matrix: %s", name, cm)
 
         results[name] = {
             "accuracy": acc,
@@ -637,7 +681,12 @@ def main() -> None:
     metrics = evaluate_models(models, X_test_scaled, y_test.values)
     logger.info("Evaluation results: %s", metrics)
 
-    # --- 9. Save processed data (optional, but handy for debugging) ---
+    # --- 9A. Save comparison report (SVM vs ANN) ---
+    report_path = ROOT / "model_comparison_report.txt"
+    save_model_comparison(metrics, report_path)
+    logger.info("Model comparison report saved to: %s", report_path)
+
+    # --- 9B. Save processed data (optional, but handy for debugging) ---
     train_preprocessed = pd.DataFrame(
         np.column_stack([X_train_scaled, y_train.values]),
         columns=list(X_train_encoded.columns) + ["income_binary"],
@@ -655,3 +704,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
