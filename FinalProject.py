@@ -4,17 +4,12 @@
 # Date   : 12/2/25
 #
 # Project Summary:
-#   This program develops two predictive models—a neural network and an
-#   SVM—to estimate whether an individual's income surpasses $50K per
-#   year using the Adult Census dataset. The workflow includes data
-#   loading, preparation, feature engineering, model training, and
-#   evaluation. 
+#   This program uses two models (ANN & SVM) to predict whether income is > 50K
+#   using the Adult Census dataset. The code loads the data, cleans
+#   it, encodes features, scales them, trains the models, and then
+#   prints out evaluation metrics.
 # -------------------------------------------------------------------
 
-
-# -------------------------------------------------------------------
-# Imports
-# -------------------------------------------------------------------
 import logging
 from pathlib import Path
 from typing import Tuple, Optional, Any, Dict
@@ -24,7 +19,6 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.svm import SVC
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -32,15 +26,6 @@ from sklearn.metrics import (
     f1_score,
     confusion_matrix,
 )
-
-# Deep learning tools (available only if the environment supports them)
-try:
-    import tensorflow as tf
-    from tensorflow import keras
-except Exception:
-    tf = None
-    keras = None
-
 
 # -------------------------------------------------------------------
 # File paths and constants
@@ -85,20 +70,14 @@ def _clean_test_labels(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# -------------------------------------------------------------------
-# Data ingestion and preparation functions
-# -------------------------------------------------------------------
 def load_dataset(path: Path) -> pd.DataFrame:
-    """Load a Census Income dataset file and convert it to a DataFrame.
+    """
+    Load a Census Income dataset file and convert it to a DataFrame.
 
     - Assigns the known column names
     - Handles '?' markers as missing values
     - Strips unnecessary whitespace
     - Applies test-file specific cleanup rules
-
-    Raises:
-        FileNotFoundError: if the file cannot be located.
-        ValueError: if the column count does not match expectations.
     """
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
@@ -111,8 +90,9 @@ def load_dataset(path: Path) -> pd.DataFrame:
         skipinitialspace=True,
     )
 
+    # The provided test file has a header line to skip
     if is_test:
-        read_kwargs["skiprows"] = 1  # test file has a header line
+        read_kwargs["skiprows"] = 1
 
     df = pd.read_csv(path, **read_kwargs)
     if is_test:
@@ -127,7 +107,7 @@ def load_dataset(path: Path) -> pd.DataFrame:
 
 
 def explore_dataset(df: pd.DataFrame) -> None:
-    """Log a basic exploratory summary of the dataset structure."""
+    """Log basic info about the dataset just for sanity checking."""
     logger = logging.getLogger("EDA")
 
     logger.info("Shape: %s", (df.shape,))
@@ -156,8 +136,11 @@ def explore_dataset(df: pd.DataFrame) -> None:
 
 
 def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
-    """Fill missing entries using a median strategy for numeric fields
-    and a mode strategy for categorical fields."""
+    """
+    Fill missing entries.
+    - Numeric columns: median
+    - Categorical columns: mode
+    """
     logger = logging.getLogger("MissingValues")
     df = df.copy()
 
@@ -185,7 +168,7 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def split_features_labels(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
-    """Separate predictors from the target and convert labels to binary."""
+    """Separate predictors from the target and convert labels to 0/1."""
     if "income" not in df.columns:
         raise ValueError("Expected 'income' column to be present.")
 
@@ -204,7 +187,10 @@ def split_features_labels(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
 def encode_categorical(
     df: pd.DataFrame, encoder: Optional[OneHotEncoder] = None
 ) -> Tuple[pd.DataFrame, OneHotEncoder]:
-    """Convert categorical fields into a one-hot encoded representation."""
+    """
+    One-hot encode categorical columns.
+    Reuse the same encoder object between train and test.
+    """
     cat_cols = df.select_dtypes(include="object").columns.tolist()
     num_cols = df.select_dtypes(exclude="object").columns.tolist()
 
@@ -240,7 +226,10 @@ def encode_categorical(
 def scale_features(
     X: pd.DataFrame, scaler: Optional[StandardScaler] = None
 ) -> Tuple[np.ndarray, StandardScaler]:
-    """Standardize numerical features using the z-score transformation."""
+    """
+    Standardize features using z-score.
+    Always output float32 to keep computations smaller/faster.
+    """
     if scaler is None:
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
@@ -251,50 +240,273 @@ def scale_features(
 
 
 def save_preprocessed(df: pd.DataFrame, out_path: Path) -> None:
-    """Write a processed DataFrame to a CSV file."""
+    """Save processed data to CSV so we can inspect later if needed."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_path, index=False)
     logging.getLogger("IO").info("Saved preprocessed data: %s", out_path)
 
 
 # -------------------------------------------------------------------
-# Model building routines
+# Manual ANN implementation (with mini-batch training)
 # -------------------------------------------------------------------
-def build_ann_model(input_shape: int) -> Any:
-    """Construct a feedforward neural network for binary classification."""
-    if keras is None:
-        logging.warning("Keras not available; ANN model creation skipped.")
-        return None
+class ManualANN:
+    """
+    Very simple feedforward neural network for binary classification.
+    Uses ReLU for hidden layers and sigmoid for the output.
+    """
 
-    try:
-        if tf is not None:
-            tf.random.set_seed(42)
-    except Exception:
-        pass
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dims=(32, 16),
+        learning_rate: float = 5e-3,
+        l2_reg: float = 0.0,
+        batch_size: int = 256,
+        seed: int = 42,
+    ) -> None:
+        self.input_dim = input_dim
+        self.hidden_dims = list(hidden_dims)
+        self.learning_rate = learning_rate
+        self.l2_reg = l2_reg
+        self.batch_size = batch_size
 
-    inputs = keras.Input(shape=(input_shape,), name="features")
-    x = keras.layers.Dense(64, activation="relu", kernel_initializer="he_normal")(inputs)
-    x = keras.layers.Dropout(0.2)(x)
-    x = keras.layers.Dense(32, activation="relu", kernel_initializer="he_normal")(x)
-    x = keras.layers.Dropout(0.2)(x)
-    outputs = keras.layers.Dense(1, activation="sigmoid", name="income")(x)
+        rng = np.random.RandomState(seed)
+        layer_sizes = [input_dim] + self.hidden_dims + [1]
 
-    model = keras.Model(inputs=inputs, outputs=outputs, name="ann_income_classifier")
-    model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=1e-3),
-        loss="binary_crossentropy",
-        metrics=[keras.metrics.BinaryAccuracy(name="accuracy"), keras.metrics.AUC(name="auc")],
+        self.W = []
+        self.b = []
+
+        # Random weight initialization (He init for ReLU)
+        for in_size, out_size in zip(layer_sizes[:-1], layer_sizes[1:]):
+            W = rng.randn(in_size, out_size).astype(np.float32) * np.sqrt(2.0 / in_size)
+            b = np.zeros(out_size, dtype=np.float32)
+            self.W.append(W)
+            self.b.append(b)
+
+    @staticmethod
+    def _sigmoid(z: np.ndarray) -> np.ndarray:
+        return 1.0 / (1.0 + np.exp(-z))
+
+    @staticmethod
+    def _relu(z: np.ndarray) -> np.ndarray:
+        return np.maximum(0.0, z)
+
+    def _forward(self, X: np.ndarray):
+        """
+        Forward pass.
+        Returns final activations and a list of caches (A_prev, Z) for backprop.
+        """
+        A = X
+        caches = []
+        L = len(self.W)
+
+        for l in range(L):
+            Z = A @ self.W[l] + self.b[l]
+            if l < L - 1:
+                A_next = self._relu(Z)
+            else:
+                A_next = self._sigmoid(Z)
+            caches.append((A, Z))
+            A = A_next
+
+        return A, caches
+
+    def _compute_loss(self, y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        """Binary cross-entropy loss + optional L2 regularization."""
+        m = y_true.shape[0]
+        eps = 1e-7
+        y_pred_clipped = np.clip(y_pred, eps, 1.0 - eps)
+
+        loss = -np.mean(
+            y_true * np.log(y_pred_clipped) + (1.0 - y_true) * np.log(1.0 - y_pred_clipped)
+        )
+
+        if self.l2_reg > 0.0:
+            l2_sum = sum(np.sum(W * W) for W in self.W)
+            loss += (self.l2_reg / (2.0 * m)) * l2_sum
+
+        return float(loss)
+
+    def _backward(self, y_true: np.ndarray, y_pred: np.ndarray, caches):
+        """
+        Backpropagation to compute gradients w.r.t. weights and biases.
+        """
+        m = y_true.shape[0]
+        grads_W = [np.zeros_like(W) for W in self.W]
+        grads_b = [np.zeros_like(b) for b in self.b]
+
+        y = y_true.reshape(-1, 1)
+        L = len(self.W)
+
+        # Output layer
+        A_prev, Z_L = caches[-1]
+        dZ = y_pred - y  # derivative of CE loss with sigmoid
+        grads_W[L - 1] = (A_prev.T @ dZ) / m + self.l2_reg * self.W[L - 1] / m
+        grads_b[L - 1] = dZ.sum(axis=0) / m
+        dA_prev = dZ @ self.W[L - 1].T
+
+        # Hidden layers (ReLU)
+        for l in reversed(range(L - 1)):
+            A_prev, Z = caches[l]
+            dZ = dA_prev * (Z > 0.0).astype(np.float32)
+            grads_W[l] = (A_prev.T @ dZ) / m + self.l2_reg * self.W[l] / m
+            grads_b[l] = dZ.sum(axis=0) / m
+            dA_prev = dZ @ self.W[l].T
+
+        return grads_W, grads_b
+
+    def fit(
+        self,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_val: Optional[np.ndarray] = None,
+        epochs: int = 10,
+        verbose: bool = True,
+    ) -> None:
+        """
+        Train the network with mini-batch gradient descent.
+        """
+        logger = logging.getLogger("ANN")
+        X = np.asarray(X_train, dtype=np.float32)
+        y = np.asarray(y_train, dtype=np.float32)
+        m = X.shape[0]
+
+        for epoch in range(1, epochs + 1):
+            # Shuffle the training data each epoch
+            idx = np.random.permutation(m)
+            X_shuffled = X[idx]
+            y_shuffled = y[idx]
+
+            # Go through mini-batches
+            for start in range(0, m, self.batch_size):
+                end = start + self.batch_size
+                X_batch = X_shuffled[start:end]
+                y_batch = y_shuffled[start:end]
+
+                if X_batch.shape[0] == 0:
+                    continue
+
+                y_pred, caches = self._forward(X_batch)
+                grads_W, grads_b = self._backward(y_batch, y_pred, caches)
+
+                # Gradient descent step
+                for l in range(len(self.W)):
+                    self.W[l] -= self.learning_rate * grads_W[l]
+                    self.b[l] -= self.learning_rate * grads_b[l]
+
+            # Only log every few epochs to keep things light
+            if verbose and (epoch == 1 or epoch % 5 == 0 or epoch == epochs):
+                y_pred_full, _ = self._forward(X)
+                train_loss = self._compute_loss(y, y_pred_full)
+                msg = f"Epoch {epoch:03d} | Train loss: {train_loss:.4f}"
+                if X_val is not None and y_val is not None:
+                    val_pred = self.predict(X_val)
+                    val_acc = accuracy_score(y_val, val_pred)
+                    msg += f" | Val acc: {val_acc:.4f}"
+                logger.info(msg)
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Return probabilities for the positive class."""
+        X = np.asarray(X, dtype=np.float32)
+        y_pred, _ = self._forward(X)
+        return y_pred.reshape(-1)
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Return 0/1 predictions based on 0.5 threshold."""
+        proba = self.predict_proba(X)
+        return (proba >= 0.5).astype(int)
+
+
+def build_ann_model(input_shape: int) -> ManualANN:
+    """Create the manual ANN with smaller/faster architecture."""
+    model = ManualANN(
+        input_dim=input_shape,
+        hidden_dims=(32, 16),
+        learning_rate=5e-3,
+        l2_reg=0.0,
+        batch_size=256,
     )
     return model
 
 
-def build_svm_model() -> SVC:
-    """Create an RBF-kernel SVM tuned for imbalanced classification."""
-    svm = SVC(
-        kernel="rbf",
+# -------------------------------------------------------------------
+# Manual linear SVM implementation (vectorized)
+# -------------------------------------------------------------------
+class ManualLinearSVM:
+    """
+    Linear SVM trained in the primal using hinge loss and
+    simple gradient descent with fully vectorized updates.
+    """
+
+    def __init__(self, C: float = 1.0, learning_rate: float = 1e-3, n_epochs: int = 15):
+        self.C = C
+        self.learning_rate = learning_rate
+        self.n_epochs = n_epochs
+        self.w: Optional[np.ndarray] = None
+        self.b: float = 0.0
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        """
+        Train linear SVM with vectorized hinge loss gradient.
+        Labels y are 0/1; they are converted to -1/+1 here.
+        """
+        logger = logging.getLogger("SVM")
+        X = np.asarray(X, dtype=np.float32)
+        y = np.asarray(y, dtype=np.int32)
+
+        y_signed = np.where(y == 1, 1.0, -1.0).astype(np.float32)
+
+        m, n = X.shape
+        self.w = np.zeros(n, dtype=np.float32)
+        self.b = 0.0
+
+        for epoch in range(1, self.n_epochs + 1):
+            # Compute margins for all points at once
+            scores = X @ self.w + self.b
+            margins = y_signed * scores
+
+            # Points that violate the margin
+            misclassified = margins < 1.0
+
+            # If everything is correctly classified, gradient only has w term
+            if np.any(misclassified):
+                X_mis = X[misclassified]
+                y_mis = y_signed[misclassified]
+
+                dw = self.w - self.C * (X_mis * y_mis[:, None]).sum(axis=0)
+                db = -self.C * y_mis.sum()
+            else:
+                dw = self.w
+                db = 0.0
+
+            # Gradient descent step
+            self.w -= self.learning_rate * dw
+            self.b -= self.learning_rate * db
+
+            # Light logging just to see training is doing something
+            if epoch == 1 or epoch % 5 == 0 or epoch == self.n_epochs:
+                preds = self.predict(X)
+                acc = accuracy_score(y, preds)
+                logger.info("Epoch %03d | SVM train acc: %.4f", epoch, acc)
+
+    def decision_function(self, X: np.ndarray) -> np.ndarray:
+        X = np.asarray(X, dtype=np.float32)
+        if self.w is None:
+            raise ValueError("Model not fitted yet.")
+        return X @ self.w + self.b
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        scores = self.decision_function(X)
+        return (scores >= 0.0).astype(int)
+
+
+def build_svm_model() -> ManualLinearSVM:
+    """Create a linear SVM with modest number of epochs for speed."""
+    svm = ManualLinearSVM(
         C=1.0,
-        gamma="scale",
-        class_weight="balanced",
+        learning_rate=1e-3,
+        n_epochs=15,
     )
     return svm
 
@@ -307,6 +519,8 @@ def evaluate_models(models: Dict[str, Any], X_test: Any, y_test: Any) -> Dict[st
     results = {}
     logger = logging.getLogger("Eval")
 
+    y_true = np.asarray(y_test, dtype=int)
+
     for name, model in models.items():
         if model is None:
             logger.warning("Model '%s' is missing; skipping.", name)
@@ -316,22 +530,21 @@ def evaluate_models(models: Dict[str, Any], X_test: Any, y_test: Any) -> Dict[st
             raise ValueError(f"Model '{name}' lacks a predict() method.")
 
         y_pred = model.predict(X_test)
+        y_pred = np.asarray(y_pred).reshape(-1)
 
-        if not isinstance(model, SVC):
-            y_pred = np.asarray(y_pred).reshape(-1)
-            y_pred = (y_pred >= 0.5).astype(int)
-        else:
-            y_pred = np.asarray(y_pred).reshape(-1)
-
-        acc = accuracy_score(y_test, y_pred)
-        prec = precision_score(y_test, y_pred, zero_division=0)
-        rec = recall_score(y_test, y_pred, zero_division=0)
-        f1 = f1_score(y_test, y_pred, zero_division=0)
-        cm = confusion_matrix(y_test, y_pred)
+        acc = accuracy_score(y_true, y_pred)
+        prec = precision_score(y_true, y_pred, zero_division=0)
+        rec = recall_score(y_true, y_pred, zero_division=0)
+        f1 = f1_score(y_true, y_pred, zero_division=0)
+        cm = confusion_matrix(y_true, y_pred)
 
         logger.info(
             "[%s] Acc: %.4f | Precision: %.4f | Recall: %.4f | F1: %.4f",
-            name, acc, prec, rec, f1,
+            name,
+            acc,
+            prec,
+            rec,
+            f1,
         )
         logger.info("[%s] Confusion matrix:\n%s", name, cm)
 
@@ -353,7 +566,7 @@ def main() -> None:
     """Run the full processing and modeling sequence."""
     logging.basicConfig(
         level=logging.INFO,
-        format="%(levelname)s | %(name)s | %(message)s"
+        format="%(levelname)s | %(name)s | %(message)s",
     )
     logger = logging.getLogger("Main")
     logger.info("Pipeline started.")
@@ -366,7 +579,7 @@ def main() -> None:
         logger.exception("Failed to load data: %s", e)
         return
 
-    # --- 2. Preliminary inspection ---
+    # --- 2. Preliminary inspection (logs only; no printing to console) ---
     logger.info("Inspecting training data...")
     explore_dataset(train_df)
     logger.info("Inspecting test data...")
@@ -388,7 +601,7 @@ def main() -> None:
     X_train_scaled, scaler = scale_features(X_train_encoded, scaler=None)
     X_test_scaled, _ = scale_features(X_test_encoded, scaler=scaler)
 
-    # Create validation subset for ANN
+    # Validation split for ANN
     (
         X_split_train,
         X_split_val,
@@ -403,28 +616,20 @@ def main() -> None:
     )
 
     # --- 7. Train models ---
-    logger.info("Training SVM...")
+    logger.info("Training manual SVM...")
     svm_model = build_svm_model()
-    svm_model.fit(X_train_scaled, y_train)
+    svm_model.fit(X_train_scaled, y_train.values)
 
-    if keras is not None:
-        logger.info("Training ANN...")
-        ann_model = build_ann_model(X_train_scaled.shape[1])
-        history = ann_model.fit(
-            X_split_train,
-            y_split_train.values,
-            validation_data=(X_split_val, y_split_val.values),
-            epochs=20,
-            batch_size=256,
-            verbose=0,
-        )
-        logger.info(
-            "ANN training completed. Final training accuracy: %.4f",
-            float(history.history["accuracy"][-1]),
-        )
-    else:
-        ann_model = None
-        logger.warning("ANN model skipped (TensorFlow/Keras unavailable).")
+    logger.info("Training manual ANN...")
+    ann_model = build_ann_model(X_train_scaled.shape[1])
+    ann_model.fit(
+        X_split_train,
+        y_split_train.values,
+        X_val=X_split_val,
+        y_val=y_split_val.values,
+        epochs=10,
+        verbose=True,
+    )
 
     # --- 8. Evaluation ---
     logger.info("Evaluating models...")
@@ -432,7 +637,7 @@ def main() -> None:
     metrics = evaluate_models(models, X_test_scaled, y_test.values)
     logger.info("Evaluation results: %s", metrics)
 
-    # --- 9. Save processed data ---
+    # --- 9. Save processed data (optional, but handy for debugging) ---
     train_preprocessed = pd.DataFrame(
         np.column_stack([X_train_scaled, y_train.values]),
         columns=list(X_train_encoded.columns) + ["income_binary"],
