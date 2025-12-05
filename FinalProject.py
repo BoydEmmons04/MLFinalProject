@@ -18,6 +18,9 @@
 #   features, trains both models, and then evaluates them using common
 #   metrics. It also saves a comparison report that summarizes how the
 #   two models performed.
+#
+#   In addition, it generates convergence plots showing how the ANN and
+#   SVM training and validation losses change over epochs.
 # -------------------------------------------------------------------
 
 import logging
@@ -26,6 +29,7 @@ from typing import Tuple, Optional, Any, Dict
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
@@ -337,6 +341,10 @@ class ManualANN:
             self.W.append(W)
             self.b.append(b)
 
+        # For convergence plots
+        self.train_losses: list[float] = []
+        self.val_losses: list[float] = []
+
     @staticmethod
     def _sigmoid(z: np.ndarray) -> np.ndarray:
         return 1.0 / (1.0 + np.exp(-z))
@@ -420,11 +428,20 @@ class ManualANN:
     ) -> None:
         """
         Train the network with mini-batch gradient descent.
+        Also records training and validation loss per epoch.
         """
         logger = logging.getLogger("ANN")
         X = np.asarray(X_train, dtype=np.float32)
         y = np.asarray(y_train, dtype=np.float32)
         m = X.shape[0]
+
+        self.train_losses.clear()
+        self.val_losses.clear()
+
+        has_val = X_val is not None and y_val is not None
+        if has_val:
+            X_val_arr = np.asarray(X_val, dtype=np.float32)
+            y_val_arr = np.asarray(y_val, dtype=np.float32)
 
         for epoch in range(1, epochs + 1):
             # Shuffle the training data each epoch
@@ -449,15 +466,26 @@ class ManualANN:
                     self.W[l] -= self.learning_rate * grads_W[l]
                     self.b[l] -= self.learning_rate * grads_b[l]
 
+            # Compute full-epoch training loss
+            y_pred_full, _ = self._forward(X)
+            train_loss = self._compute_loss(y, y_pred_full)
+            self.train_losses.append(train_loss)
+
+            # Compute validation loss if provided
+            if has_val:
+                y_val_pred, _ = self._forward(X_val_arr)
+                val_loss = self._compute_loss(y_val_arr, y_val_pred)
+                self.val_losses.append(val_loss)
+                msg = (
+                    f"Epoch {epoch:03d} | Train loss: {train_loss:.4f} "
+                    f"| Val loss: {val_loss:.4f}"
+                )
+            else:
+                self.val_losses.append(np.nan)
+                msg = f"Epoch {epoch:03d} | Train loss: {train_loss:.4f}"
+
             # Only log every few epochs to keep things light
             if verbose and (epoch == 1 or epoch % 5 == 0 or epoch == epochs):
-                y_pred_full, _ = self._forward(X)
-                train_loss = self._compute_loss(y, y_pred_full)
-                msg = f"Epoch {epoch:03d} | Train loss: {train_loss:.4f}"
-                if X_val is not None and y_val is not None:
-                    val_pred = self.predict(X_val)
-                    val_acc = accuracy_score(y_val, val_pred)
-                    msg += f" | Val acc: {val_acc:.4f}"
                 logger.info(msg)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
@@ -500,10 +528,41 @@ class ManualLinearSVM:
         self.w: Optional[np.ndarray] = None
         self.b: float = 0.0
 
-    def fit(self, X: np.ndarray, y: np.ndarray) -> None:
+        # For convergence plots
+        self.train_losses: list[float] = []
+        self.val_losses: list[float] = []
+
+    def _compute_hinge_loss(self, X: np.ndarray, y: np.ndarray) -> float:
+        """
+        Compute regularized hinge loss:
+        0.5 * ||w||^2 + C * sum(max(0, 1 - y_i * (w^T x_i + b))).
+        y is expected to be 0/1.
+        """
+        if self.w is None:
+            raise ValueError("Model not fitted yet.")
+
+        X = np.asarray(X, dtype=np.float32)
+        y = np.asarray(y, dtype=np.int32)
+        y_signed = np.where(y == 1, 1.0, -1.0).astype(np.float32)
+
+        scores = X @ self.w + self.b
+        margins = 1.0 - y_signed * scores
+        hinge = np.maximum(0.0, margins).sum()
+        reg = 0.5 * np.sum(self.w * self.w)
+        loss = reg + self.C * hinge
+        return float(loss)
+
+    def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_val: Optional[np.ndarray] = None,
+    ) -> None:
         """
         Train linear SVM with vectorized hinge loss gradient.
         Labels y are 0/1; they are converted to -1/+1 here.
+        Also records training and validation hinge loss per epoch.
         """
         logger = logging.getLogger("SVM")
         X = np.asarray(X, dtype=np.float32)
@@ -514,6 +573,14 @@ class ManualLinearSVM:
         m, n = X.shape
         self.w = np.zeros(n, dtype=np.float32)
         self.b = 0.0
+
+        self.train_losses.clear()
+        self.val_losses.clear()
+
+        has_val = X_val is not None and y_val is not None
+        if has_val:
+            X_val_arr = np.asarray(X_val, dtype=np.float32)
+            y_val_arr = np.asarray(y_val, dtype=np.int32)
 
         for epoch in range(1, self.n_epochs + 1):
             # Compute margins for all points at once
@@ -538,11 +605,24 @@ class ManualLinearSVM:
             self.w -= self.learning_rate * dw
             self.b -= self.learning_rate * db
 
+            # Track hinge loss
+            train_loss = self._compute_hinge_loss(X, y)
+            self.train_losses.append(train_loss)
+
+            if has_val:
+                val_loss = self._compute_hinge_loss(X_val_arr, y_val_arr)
+                self.val_losses.append(val_loss)
+                msg = (
+                    f"Epoch {epoch:03d} | SVM train loss: {train_loss:.4f} "
+                    f"| Val loss: {val_loss:.4f}"
+                )
+            else:
+                self.val_losses.append(np.nan)
+                msg = f"Epoch {epoch:03d} | SVM train loss: {train_loss:.4f}"
+
             # Light logging just to see training is doing something
             if epoch == 1 or epoch % 5 == 0 or epoch == self.n_epochs:
-                preds = self.predict(X)
-                acc = accuracy_score(y, preds)
-                logger.info("Epoch %03d | SVM train acc: %.4f", epoch, acc)
+                logger.info(msg)
 
     def decision_function(self, X: np.ndarray) -> np.ndarray:
         X = np.asarray(X, dtype=np.float32)
@@ -614,6 +694,43 @@ def evaluate_models(models: Dict[str, Any], X_test: Any, y_test: Any) -> Dict[st
 
 
 # -------------------------------------------------------------------
+# Convergence plotting helpers
+# -------------------------------------------------------------------
+def plot_ann_convergence(ann_model: ManualANN, out_path: Path) -> None:
+    """Plot ANN training vs validation loss in a single graph."""
+    epochs = range(1, len(ann_model.train_losses) + 1)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, ann_model.train_losses, label="Training Loss")
+    if ann_model.val_losses and not np.all(np.isnan(ann_model.val_losses)):
+        plt.plot(epochs, ann_model.val_losses, label="Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("ANN Convergence (Loss vs Epoch)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
+def plot_svm_convergence(svm_model: ManualLinearSVM, out_path: Path) -> None:
+    """Plot SVM training vs validation hinge loss in a single graph."""
+    epochs = range(1, len(svm_model.train_losses) + 1)
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, svm_model.train_losses, label="Training Loss")
+    if svm_model.val_losses and not np.all(np.isnan(svm_model.val_losses)):
+        plt.plot(epochs, svm_model.val_losses, label="Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("SVM Convergence (Hinge Loss vs Epoch)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path)
+    plt.close()
+
+
+# -------------------------------------------------------------------
 # Main execution pipeline
 # -------------------------------------------------------------------
 def main() -> None:
@@ -655,7 +772,7 @@ def main() -> None:
     X_train_scaled, scaler = scale_features(X_train_encoded, scaler=None)
     X_test_scaled, _ = scale_features(X_test_encoded, scaler=scaler)
 
-    # Validation split for ANN
+    # Validation split for both ANN and SVM
     (
         X_split_train,
         X_split_val,
@@ -672,7 +789,12 @@ def main() -> None:
     # --- 7. Train models ---
     logger.info("Training manual SVM...")
     svm_model = build_svm_model()
-    svm_model.fit(X_train_scaled, y_train.values)
+    svm_model.fit(
+        X_split_train,
+        y_split_train.values,
+        X_val=X_split_val,
+        y_val=y_split_val.values,
+    )
 
     logger.info("Training manual ANN...")
     ann_model = build_ann_model(X_train_scaled.shape[1])
@@ -708,6 +830,11 @@ def main() -> None:
 
     save_preprocessed(train_preprocessed, ROOT / "adult_preprocessed_train.csv")
     save_preprocessed(test_preprocessed, ROOT / "adult_preprocessed_test.csv")
+
+    # --- 10. Convergence plots ---
+    plot_ann_convergence(ann_model, ROOT / "ann_convergence.png")
+    plot_svm_convergence(svm_model, ROOT / "svm_convergence.png")
+    logger.info("Convergence plots saved as 'ann_convergence.png' and 'svm_convergence.png'.")
 
     logger.info("Pipeline completed successfully.")
 
