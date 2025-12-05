@@ -1,13 +1,23 @@
 # -------------------------------------------------------------------
 # Authors: Carter Ward, Boyd Emmons
 # Course : CS 430 - Section 1
-# Date   : 12/2/25
+# Date   : 12/5/25
 #
 # Project Summary:
-#   This program uses two models (ANN & SVM) to predict whether income is > 50K
-#   using the Adult Census dataset. The code loads the data, cleans
-#   it, encodes features, scales them, trains the models, and then
-#   prints out evaluation metrics. A comparison report is saved to file.
+#   This program builds two models, an Artificial Neural Network (ANN)
+#   and a Support Vector Machine (SVM), to predict whether a person
+#   earns more than $50K a year using the Adult Census dataset.
+#
+#   We wrote the ANN and SVM ourselves using NumPy so we could see
+#   exactly how the learning process works, instead of relying on
+#   machine learning libraries that hide most of the details. This let
+#   us control the steps for forward passes, backpropagation, and the
+#   SVM's hinge-loss updates.
+#
+#   The program loads and cleans the data, encodes and scales the
+#   features, trains both models, and then evaluates them using common
+#   metrics. It also saves a comparison report that summarizes how the
+#   two models performed.
 # -------------------------------------------------------------------
 
 import logging
@@ -704,4 +714,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
