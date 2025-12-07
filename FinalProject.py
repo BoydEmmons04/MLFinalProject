@@ -1,7 +1,7 @@
 # -------------------------------------------------------------------
 # Authors: Carter Ward, Boyd Emmons
-# Course : CS 430 - Section 1
-# Date   : 12/5/25
+# Course : CS 430 - 1
+# Date   : 12/7/25 (Final Version)
 #
 # Project Summary:
 #   This program builds two models, an Artificial Neural Network (ANN)
@@ -9,8 +9,7 @@
 #   earns more than $50K a year using the Adult Census dataset.
 #
 #   We wrote the ANN and SVM ourselves using NumPy so we could see
-#   exactly how the learning process works, instead of relying on
-#   machine learning libraries that hide most of the details. This let
+#   exactly how the learning process works. This lets
 #   us control the steps for forward passes, backpropagation, and the
 #   SVM's hinge-loss updates.
 #
