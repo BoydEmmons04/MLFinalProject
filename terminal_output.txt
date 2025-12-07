@@ -1,0 +1,185 @@
+INFO | Main | Pipeline started.
+INFO | Main | Inspecting training data...
+INFO | EDA | Shape: ((32561, 15),)
+INFO | EDA | Dtypes: age                int64
+workclass         object
+fnlwgt             int64
+education         object
+education-num      int64
+marital-status    object
+occupation        object
+relationship      object
+race              object
+sex               object
+capital-gain       int64
+capital-loss       int64
+hours-per-week     int64
+native-country    object
+income            object
+dtype: object
+INFO | EDA | Head:    age         workclass  fnlwgt  education  education-num  \
+0   39         State-gov   77516  Bachelors             13
+1   50  Self-emp-not-inc   83311  Bachelors             13
+2   38           Private  215646    HS-grad              9
+3   53           Private  234721       11th              7
+4   28           Private  338409  Bachelors             13
+
+       marital-status         occupation   relationship   race     sex  \
+0       Never-married       Adm-clerical  Not-in-family  White    Male
+1  Married-civ-spouse    Exec-managerial        Husband  White    Male
+2            Divorced  Handlers-cleaners  Not-in-family  White    Male
+3  Married-civ-spouse  Handlers-cleaners        Husband  Black    Male
+4  Married-civ-spouse     Prof-specialty           Wife  Black  Female
+
+   capital-gain  capital-loss  hours-per-week native-country income
+0          2174             0              40  United-States  <=50K
+1             0             0              13  United-States  <=50K
+2             0             0              40  United-States  <=50K
+3             0             0              40  United-States  <=50K
+4             0             0              40           Cuba  <=50K
+INFO | EDA | Missing values by column: occupation        1843
+workclass         1836
+native-country     583
+fnlwgt               0
+education            0
+education-num        0
+age                  0
+marital-status       0
+relationship         0
+sex                  0
+race                 0
+capital-gain         0
+capital-loss         0
+hours-per-week       0
+income               0
+dtype: int64
+INFO | EDA | Class distribution: income
+<=50K    24720
+>50K      7841
+INFO | EDA | Class proportions: income
+<=50K    0.7592
+>50K     0.2408
+INFO | EDA | Numeric fields (6): ['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss','hours-per-week']
+INFO | EDA | Categorical fields (9): ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country', 'income']
+INFO | EDA | Numeric summary:                   count           mean            std      min       25%  \
+age             32561.0      38.581647      13.640433     17.0      28.0
+fnlwgt          32561.0  189778.366512  105549.977697  12285.0  117827.0
+education-num   32561.0      10.080679       2.572720      1.0       9.0
+capital-gain    32561.0    1077.648844    7385.292085      0.0       0.0
+capital-loss    32561.0      87.303830     402.960219      0.0       0.0
+hours-per-week  32561.0      40.437456      12.347429      1.0      40.0
+
+                     50%       75%        max
+age                 37.0      48.0       90.0
+fnlwgt          178356.0  237051.0  1484705.0
+education-num       10.0      12.0       16.0
+capital-gain         0.0       0.0    99999.0
+capital-loss         0.0       0.0     4356.0
+hours-per-week      40.0      45.0       99.0
+INFO | Main | Inspecting test data...
+INFO | EDA | Shape: ((16281, 15),)
+INFO | EDA | Dtypes: age                int64
+workclass         object
+fnlwgt             int64
+education         object
+education-num      int64
+marital-status    object
+occupation        object
+relationship      object
+race              object
+sex               object
+capital-gain       int64
+capital-loss       int64
+hours-per-week     int64
+native-country    object
+income            object
+dtype: object
+INFO | EDA | Head:    age  workclass  fnlwgt     education  education-num      marital-status  \
+0   25    Private  226802          11th              7       Never-married
+1   38    Private   89814       HS-grad              9  Married-civ-spouse
+2   28  Local-gov  336951    Assoc-acdm             12  Married-civ-spouse
+3   44    Private  160323  Some-college             10  Married-civ-spouse
+4   18        NaN  103497  Some-college             10       Never-married
+
+          occupation relationship   race     sex  capital-gain  capital-loss  \
+0  Machine-op-inspct    Own-child  Black    Male             0             0
+1    Farming-fishing      Husband  White    Male             0             0
+2    Protective-serv      Husband  White    Male             0             0
+3  Machine-op-inspct      Husband  Black    Male          7688             0
+4                NaN    Own-child  White  Female             0             0
+
+   hours-per-week native-country income
+0              40  United-States  <=50K
+1              50  United-States  <=50K
+2              40  United-States   >50K
+3              40  United-States   >50K
+4              30  United-States  <=50K
+INFO | EDA | Missing values by column: occupation        966
+workclass         963
+native-country    274
+fnlwgt              0
+education           0
+education-num       0
+age                 0
+marital-status      0
+relationship        0
+sex                 0
+race                0
+capital-gain        0
+capital-loss        0
+hours-per-week      0
+income              0
+dtype: int64
+INFO | EDA | Class distribution: income
+<=50K    12435
+>50K      3846
+INFO | EDA | Class proportions: income
+<=50K    0.7638
+>50K     0.2362
+INFO | EDA | Numeric fields (6): ['age', 'fnlwgt', 'education-num', 'capital-gain', 'capital-loss','hours-per-week']
+INFO | EDA | Categorical fields (9): ['workclass', 'education', 'marital-status', 'occupation', 'relationship', 'race', 'sex', 'native-country', 'income']
+INFO | EDA | Numeric summary:                   count           mean            std      min       25%  \
+age             16281.0      38.767459      13.849187     17.0      28.0
+fnlwgt          16281.0  189435.677784  105714.907671  13492.0  116736.0
+education-num   16281.0      10.072907       2.567545      1.0       9.0
+capital-gain    16281.0    1081.905104    7583.935968      0.0       0.0
+capital-loss    16281.0      87.899269     403.105286      0.0       0.0
+hours-per-week  16281.0      40.392236      12.479332      1.0      40.0
+
+                     50%       75%        max
+age                 37.0      48.0       90.0
+fnlwgt          177831.0  238384.0  1490400.0
+education-num       10.0      12.0       16.0
+capital-gain         0.0       0.0    99999.0
+capital-loss         0.0       0.0     3770.0
+hours-per-week      40.0      45.0       99.0
+INFO | MissingValues | Missing values before processing: 4262
+INFO | MissingValues | Missing values after processing: 0
+INFO | MissingValues | Missing values before processing: 2203
+INFO | MissingValues | Missing values after processing: 0
+INFO | Main | Training manual SVM...
+INFO | SVM | Epoch 001 | SVM train loss: 181220.1562 | Val loss: 45687.9219
+INFO | SVM | Epoch 005 | SVM train loss: 41656.2266 | Val loss: 10501.1211
+INFO | SVM | Epoch 010 | SVM train loss: 67629.7656 | Val loss: 16692.5762
+INFO | SVM | Epoch 015 | SVM train loss: 59771.1289 | Val loss: 15278.6768
+INFO | Main | Training manual ANN...
+INFO | ANN | Epoch 001 | Train loss: 0.6705 | Val loss: 0.6673
+INFO | ANN | Epoch 005 | Train loss: 0.6963 | Val loss: 0.6950
+INFO | ANN | Epoch 010 | Train loss: 0.7679 | Val loss: 0.7696
+INFO | Main | Evaluating models...
+INFO | Eval | [SVM] Acc: 0.7979 | Precision: 0.5486 | Recall: 0.8151 | F1: 0.6558
+INFO | Eval | [SVM] Confusion matrix: [[9855 2580]
+ [ 711 3135]]
+INFO | Eval | [ANN] Acc: 0.8141 | Precision: 0.6415 | Recall: 0.4826 | F1: 0.5508
+INFO | Eval | [ANN] Confusion matrix: [[11398  1037]
+ [ 1990  1856]]
+INFO | Main | Evaluation results: {'SVM': {'accuracy': 0.7978625391560715, 'precision': 0.5485564304461942, 'recall': 0.8151326053042122, 'f1': 0.6557891433950424, 'confusion_matrix': array([[9855, 2580],
+       [ 711, 3135]])}, 'ANN': {'accuracy': 0.8140777593513912, 'precision': 0.6415485655029382, 'recall': 0.4825793031721269, 'f1': 0.5508235643270515, 'confusion_matrix': array([[11398,  1037],
+       [ 1990,  1856]])}}
+INFO | Main | Model comparison report saved to: c:\Users\Carte\OneDrive\Desktop\MLFinalProject\model_comparison_report.txt
+INFO | IO | Saved preprocessed data: c:\Users\Carte\OneDrive\Desktop\MLFinalProject\adult_preprocessed_train.csv
+INFO | IO | Saved preprocessed data: c:\Users\Carte\OneDrive\Desktop\MLFinalProject\adult_preprocessed_test.csv
+INFO | Main | Convergence plots saved as 'ann_convergence.png' and 'svm_convergence.png'.
+INFO | Main | Pipeline completed successfully.
+
+
